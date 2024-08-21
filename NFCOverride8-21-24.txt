@@ -1,0 +1,115 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { connect } from 'react-redux';
+import DataForm from './DataForm';
+import { AlertModal } from './AlertModal';
+import {
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalBody,
+  Spinner
+} from '@chakra-ui/react'
+import { axios } from '../features/axiosDispatcher';
+import _axios from "axios";
+
+function NFCOverride(props) {
+  const { onOpenNFCOverrideModal, callBack } = props;
+  const [authStatus, setAuthStatus] = useState(null);
+  const [spinner, setSpinner] = useState(false);
+  const [cancelling, setCancelling] = useState(null);
+  const [controller, setController] = useState(new AbortController());
+  const [buttonText, setButtonText] = useState('Authenticate');
+  
+  const authenticate = useCallback(async () =>
+    new Promise((resolve, reject) => {
+      // const authenticate = useCallback(async () => {
+      try {
+
+        const response = _axios.get(
+          'http://localhost:8899/proxy/GetAuthen',
+          {
+            signal: controller.signal,
+          }).then((res) => {
+            resolve(res);
+          })
+        .catch (function(error) {
+          if (error.response != null ) {
+            reject(error.response);
+          }
+        });
+        // setTimeout(() => {
+        //   // source.cancel();
+        //   controller.abort('User aborted!');
+        // }, 1500)
+        // } 
+   
+      } catch (error) {
+   
+      }
+    }));
+
+  useEffect(() => {
+    if (!authStatus || cancelling === null)
+      return
+    
+    if (authStatus.data !== 'User Aborted.') {
+      callBack(authStatus);
+      onOpenNFCOverrideModal('close');
+      setSpinner(false);
+      setCancelling(null);
+    } 
+    else {//user aborted
+      setSpinner(false);
+      setCancelling(null);
+    }
+  }, [authStatus, callBack, cancelling, spinner]);
+
+  useEffect(() => {
+    if (cancelling === null || cancelling === true) {
+      setButtonText('Authenticate');
+    } else {
+      setButtonText('Cancel');
+    }
+  }, [cancelling])
+
+  const authenticateWrapper = useCallback(async () => {
+    if (cancelling === null) {//cancel button init and not clicked
+      setAuthStatus(null);
+      setSpinner(true);
+      setCancelling(false);
+      await authenticate()
+        .then((res) => {
+          setAuthStatus(res);
+        })
+        .catch((error) => {
+          setAuthStatus(error)
+        });
+    }  
+    else if (buttonText === 'Authenticate' && cancelling === false) {
+      setAuthStatus({data:'User aborted.'});
+      setSpinner(false);
+      setCancelling(true);
+      setTimeout(() => {
+        controller.abort({data:'User aborted.'});
+      })
+      
+    }
+  }, [authStatus, callBack, cancelling, spinner, controller])
+  return (
+    <>
+      <button onClick={() => authenticateWrapper()} >{buttonText}</button>
+      <br />
+      {spinner === true ? <Spinner /> : null}
+      <br />
+      {authStatus && <p>{authStatus.data}</p>}
+    </>
+  );
+}
+
+function mapStateToProps(state) {
+  const { common, assignment } = state;
+  return {
+  }
+}
+
+export default connect(mapStateToProps)(NFCOverride);
